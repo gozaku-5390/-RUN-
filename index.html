@@ -44,7 +44,7 @@
 
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-app.js";
-import { getDatabase, ref, push, query, orderByChild, get, startAt } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-database.js";
+import { getDatabase, ref, push, get } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-database.js";
 
 // --- Firebase設定 ---
 const firebaseConfig = {
@@ -207,18 +207,23 @@ function drawTile(tile, nextTile){
 // --- ゲームオーバー表示 ---
 async function showGameOver(){
     const finalScore = Math.floor(score);
+
     try{
         const scoresRef = ref(db, 'scores');
         await push(scoresRef, { score: finalScore, timestamp: Date.now() });
 
-        const today = new Date(); today.setHours(0,0,0,0);
-        const topQuery = query(scoresRef, orderByChild('timestamp'), startAt(today.getTime()));
-        const snapshot = await get(topQuery);
+        // 今日の開始タイムスタンプ
+        const today = new Date();
+        today.setHours(0,0,0,0);
 
+        const snapshot = await get(scoresRef);
         let topScore = finalScore;
+
         snapshot.forEach(child=>{
-            const s = child.val().score;
-            if(s>topScore) topScore=s;
+            const data = child.val();
+            if(data.timestamp >= today.getTime() && data.score > topScore){
+                topScore = data.score;
+            }
         });
 
         document.getElementById('finalScore').innerText = 'Score: ' + finalScore;
@@ -242,7 +247,6 @@ function update(){
         drawTile(tile,nextTile);
     }
 
-    // 左端タイルを右端へ再利用
     if(tiles[0].x + TILE_WIDTH < 0){
         let old = tiles.shift();
         const lastX = tiles[tiles.length-1].x + TILE_WIDTH;
@@ -255,10 +259,10 @@ function update(){
         tiles.push(old);
     }
 
-    // プレイヤー物理
     player.vy += 0.25;
     player.y += player.vy;
     let onTile = false;
+
     for(let tile of tiles){
         const pxCenter = player.x + player.width/2;
         if(!tile.hole){
@@ -280,8 +284,6 @@ function update(){
                 }
             }
         }
-
-        // コイン回収
         tile.coins = tile.coins.filter(c=>{
             const hit = player.x + player.width > c.x && player.x < c.x + c.width &&
                         player.y + player.height > c.y && player.y < c.y + c.height;
@@ -289,10 +291,11 @@ function update(){
             return !hit;
         });
     }
+
     player.onGround = onTile;
 
     if(player.y > BASE_HEIGHT){
-        setTimeout(showGameOver, 50);
+        setTimeout(showGameOver,50);
         return;
     }
 
