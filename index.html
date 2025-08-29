@@ -22,7 +22,7 @@
     display:none;
     box-shadow:0 4px 10px rgba(0,0,0,0.3);
   }
-  #gameOverScreen h1 { margin:0 0 10px 0; font-size:24px; }
+  #gameOverScreen h1 { margin:0 0 10px 0; font-size:24px; white-space: pre-line; }
   #gameOverScreen p { margin:0; font-size:18px; white-space: pre-line; }
   #retryBtn { margin-top:10px; padding:5px 20px; font-size:16px; cursor:pointer; }
 </style>
@@ -252,25 +252,18 @@ function drawTile(tile, nextTile){
     });
 }
 
-// ゲームオーバー表示（Realtime Database版 世界記録追加）
+// ゲームオーバー表示（今日の世界記録取得・表示）
 async function showGameOver(){
     const finalScore = Math.floor(score);
-    document.getElementById('finalScore').innerText = 'Score: ' + finalScore;
 
     try{
         const scoresRef = firebase.database().ref('scores');
-        // スコア追加
-        await push(scoresRef, {
-            score: finalScore,
-            timestamp: Date.now()
-        });
+        await push(scoresRef, { score: finalScore, timestamp: Date.now() });
 
-        // 今日の0時
         const today = new Date();
         today.setHours(0,0,0,0);
         const startOfToday = today.getTime();
 
-        // 今日のスコア取得
         const topQuery = query(scoresRef, orderByChild('timestamp'), startAt(startOfToday));
         const snapshot = await get(topQuery);
 
@@ -280,8 +273,10 @@ async function showGameOver(){
             if(s > topScore) topScore = s;
         });
 
-        document.getElementById('finalScore').innerText =
-            'Score: ' + finalScore + '\n今日の世界記録: ' + topScore;
+        document.getElementById('finalScore').innerText = 'Score: ' + finalScore;
+
+        const gameOverTitle = document.querySelector('#gameOverScreen h1');
+        gameOverTitle.innerText = 'Game Over\n今日の世界記録: ' + topScore;
 
         document.getElementById('gameOverScreen').style.display = 'block';
 
@@ -376,7 +371,7 @@ function update(){
 
     if(player.y > BASE_HEIGHT){
         showGameOver();
-        return; // ループ停止
+        return;
     }
 
     ctx.fillStyle = 'red';
