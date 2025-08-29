@@ -23,7 +23,7 @@
     box-shadow:0 4px 10px rgba(0,0,0,0.3);
   }
   #gameOverScreen h1 { margin:0 0 10px 0; font-size:24px; }
-  #gameOverScreen p { margin:0; font-size:18px; }
+  #gameOverScreen p { margin:0; font-size:18px; white-space: pre-line; }
   #retryBtn { margin-top:10px; padding:5px 20px; font-size:16px; cursor:pointer; }
 </style>
 </head>
@@ -41,6 +41,25 @@
   <p id="finalScore">Score: 0</p>
   <button id="retryBtn">Retry</button>
 </div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-app.js";
+import { getDatabase, ref, push, query, orderByChild, get, startAt } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-database.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyDJeyWJrpSdjUGbO-Hq5EwRpz2adPuioK0",
+  authDomain: "run-14dc4.firebaseapp.com",
+  databaseURL: "https://run-14dc4-default-rtdb.firebaseio.com",
+  projectId: "run-14dc4",
+  storageBucket: "run-14dc4.firebasestorage.app",
+  messagingSenderId: "905839781380",
+  appId: "1:905839781380:web:1222f2d826fd7d43d9f751",
+  measurementId: "G-BT165ZQ7E4"
+};
+
+const app = initializeApp(firebaseConfig);
+const db = getDatabase(app);
+</script>
 
 <script>
 const canvas = document.getElementById('gameCanvas');
@@ -114,7 +133,7 @@ document.getElementById('startBtn').addEventListener('click', () => {
 });
 
 // リトライボタン
-document.getElementById('retryBtn').addEventListener('click', ()=>{
+document.getElementById('retryBtn').addEventListener('click', ()=> {
     document.getElementById('gameOverScreen').style.display = 'none';
     resetGame();
 });
@@ -233,10 +252,43 @@ function drawTile(tile, nextTile){
     });
 }
 
-// ゲームオーバー表示
-function showGameOver(){
-    document.getElementById('finalScore').innerText = 'Score: ' + Math.floor(score);
-    document.getElementById('gameOverScreen').style.display = 'block';
+// ゲームオーバー表示（Realtime Database版 世界記録追加）
+async function showGameOver(){
+    const finalScore = Math.floor(score);
+    document.getElementById('finalScore').innerText = 'Score: ' + finalScore;
+
+    try{
+        const scoresRef = firebase.database().ref('scores');
+        // スコア追加
+        await push(scoresRef, {
+            score: finalScore,
+            timestamp: Date.now()
+        });
+
+        // 今日の0時
+        const today = new Date();
+        today.setHours(0,0,0,0);
+        const startOfToday = today.getTime();
+
+        // 今日のスコア取得
+        const topQuery = query(scoresRef, orderByChild('timestamp'), startAt(startOfToday));
+        const snapshot = await get(topQuery);
+
+        let topScore = finalScore;
+        snapshot.forEach(child => {
+            const s = child.val().score;
+            if(s > topScore) topScore = s;
+        });
+
+        document.getElementById('finalScore').innerText =
+            'Score: ' + finalScore + '\n今日の世界記録: ' + topScore;
+
+        document.getElementById('gameOverScreen').style.display = 'block';
+
+    } catch(err){
+        console.error(err);
+        document.getElementById('gameOverScreen').style.display = 'block';
+    }
 }
 
 // ゲームループ
