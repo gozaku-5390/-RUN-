@@ -46,6 +46,7 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-app.js";
 import { getDatabase, ref, push, query, orderByChild, get, startAt } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-database.js";
 
+// --- Firebase設定 ---
 const firebaseConfig = {
   apiKey: "AIzaSyDJeyWJrpSdjUGbO-Hq5EwRpz2adPuioK0",
   authDomain: "run-14dc4.firebaseapp.com",
@@ -56,20 +57,16 @@ const firebaseConfig = {
   appId: "1:905839781380:web:1222f2d826fd7d43d9f751",
   measurementId: "G-BT165ZQ7E4"
 };
-
 const app = initializeApp(firebaseConfig);
 const db = getDatabase(app);
-</script>
 
-<script>
+// --- ゲーム設定 ---
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
-
 const BASE_WIDTH = 512;
 const BASE_HEIGHT = 128;
 const TILE_WIDTH = 64;
 const TILE_HEIGHT = 12;
-
 let scale = 1;
 
 let player = { x:50, y:BASE_HEIGHT - TILE_HEIGHT - 16, width:12, height:16, vy:0, onGround:true };
@@ -80,6 +77,7 @@ let score = 0;
 let plainGroundCount = 0;
 let coinCooldown = 0;
 
+// --- 画像読み込み ---
 const imgGround = new Image(); imgGround.src='ground.png';
 const imgPlatform = new Image(); imgPlatform.src='platform.png';
 const imgCoin = new Image(); imgCoin.src='coin.png';
@@ -97,6 +95,7 @@ images.forEach(img => {
     }
 });
 
+// --- 横画面チェック ---
 function checkOrientation(){
     if(window.innerHeight > window.innerWidth){
         document.getElementById('loadingText').innerText = '横画面にしてください';
@@ -115,17 +114,20 @@ window.addEventListener('resize', () => {
     checkOrientation();
 });
 
+// --- スタートボタン ---
 document.getElementById('startBtn').addEventListener('click', () => {
     if(!checkOrientation()) return;
     document.getElementById('loading').style.display = 'none';
     initTiles();
 });
 
+// --- リトライボタン ---
 document.getElementById('retryBtn').addEventListener('click', ()=> {
     document.getElementById('gameOverScreen').style.display = 'none';
     resetGame();
 });
 
+// --- ゲームリセット ---
 function resetGame(){
     tiles = [];
     score = 0;
@@ -138,13 +140,13 @@ function resetGame(){
     initTiles();
 }
 
+// --- タイル初期化 ---
 function initTiles(){
     const tilesNum = Math.ceil(BASE_WIDTH / TILE_WIDTH) + 1;
     let i = 0;
     while(i < tilesNum){
         let hole = (i>=5 && Math.random() < 0.3);
-        if(!hole) plainGroundCount++;
-        else plainGroundCount=0;
+        if(!hole) plainGroundCount++; else plainGroundCount=0;
         const tile = {x:i*TILE_WIDTH, hole:hole, platform:null, coins:[]};
         generateCoinSet(tile);
         tiles.push(tile);
@@ -163,6 +165,7 @@ function initTiles(){
     update();
 }
 
+// --- キャンバス拡大 ---
 function resizeCanvas(){
     const scaleX = window.innerWidth / BASE_WIDTH;
     const scaleY = window.innerHeight / BASE_HEIGHT;
@@ -172,6 +175,7 @@ function resizeCanvas(){
     SCROLL_SPEED = SCROLL_SPEED_BASE * scale;
 }
 
+// --- コインセット生成 ---
 function generateCoinSet(tile){
     tile.coins = [];
     if(coinCooldown>0){ coinCooldown--; return; }
@@ -183,6 +187,7 @@ function generateCoinSet(tile){
     }
 }
 
+// --- タイル描画 ---
 function drawTile(tile, nextTile){
     if(!tile.hole){
         ctx.drawImage(imgGround, tile.x, BASE_HEIGHT - TILE_HEIGHT, TILE_WIDTH, TILE_HEIGHT);
@@ -199,18 +204,15 @@ function drawTile(tile, nextTile){
     tile.coins.forEach(c=>ctx.drawImage(imgCoin,c.x,c.y,c.width,c.height));
 }
 
-// --- ゲームオーバー表示（自分のスコア & 今日の世界記録） ---
+// --- ゲームオーバー表示 ---
 async function showGameOver(){
     const finalScore = Math.floor(score);
-
     try{
-        const scoresRef = firebase.database().ref('scores');
+        const scoresRef = ref(db, 'scores');
         await push(scoresRef, { score: finalScore, timestamp: Date.now() });
 
         const today = new Date(); today.setHours(0,0,0,0);
-        const startOfToday = today.getTime();
-
-        const topQuery = query(scoresRef, orderByChild('timestamp'), startAt(startOfToday));
+        const topQuery = query(scoresRef, orderByChild('timestamp'), startAt(today.getTime()));
         const snapshot = await get(topQuery);
 
         let topScore = finalScore;
@@ -222,7 +224,6 @@ async function showGameOver(){
         document.getElementById('finalScore').innerText = 'Score: ' + finalScore;
         document.querySelector('#gameOverScreen h1').innerText = 'Game Over\n今日の世界記録: ' + topScore;
         document.getElementById('gameOverScreen').style.display = 'block';
-
     } catch(err){
         console.error(err);
         document.getElementById('gameOverScreen').style.display = 'block';
@@ -235,52 +236,70 @@ function update(){
 
     for(let i=0;i<tiles.length;i++){
         const tile = tiles[i];
-        tile.x -= SCROLL_SPEED/scale;
-        tile.coins.forEach(c=>c.x -= SCROLL_SPEED/scale);
+        tile.x -= SCROLL_SPEED / scale;
+        tile.coins.forEach(c=>{ c.x -= SCROLL_SPEED/scale; });
         const nextTile = (i<tiles.length-1)?tiles[i+1]:null;
         drawTile(tile,nextTile);
     }
 
+    // 左端タイルを右端へ再利用
     if(tiles[0].x + TILE_WIDTH < 0){
         let old = tiles.shift();
         const lastX = tiles[tiles.length-1].x + TILE_WIDTH;
-        let hole = (plainGroundCount>=5) ? true : Math.random()<0.3;
-        if(hole) plainGroundCount=0; else plainGroundCount++;
-        old.x=lastX; old.hole=hole; old.platform=null;
+        let hole = (plainGroundCount>=5) ? true : (Math.random()<0.3);
+        if(!hole) plainGroundCount++; else plainGroundCount=0;
+        old.x = lastX;
+        old.hole = hole;
+        old.platform = null;
         generateCoinSet(old);
         tiles.push(old);
     }
 
-    player.vy += 0.25; player.y += player.vy;
-    let onTile=false;
+    // プレイヤー物理
+    player.vy += 0.25;
+    player.y += player.vy;
+    let onTile = false;
     for(let tile of tiles){
-        const pxCenter=player.x+player.width/2;
-        if(!tile.hole && pxCenter>tile.x && pxCenter<tile.x+TILE_WIDTH && player.y+player.height>=BASE_HEIGHT-TILE_HEIGHT){
-            player.y = BASE_HEIGHT-TILE_HEIGHT-player.height;
-            player.vy=0; onTile=true;
-        }
-        if(tile.platform){
-            const p=tile.platform;
-            if(player.x+player.width>p.x && player.x<p.x+p.width &&
-               player.y+player.height>=p.y && player.y+player.height<=p.y+player.vy+0.5){
-                player.y=p.y-player.height; player.vy=0; onTile=true;
+        const pxCenter = player.x + player.width/2;
+        if(!tile.hole){
+            if(pxCenter > tile.x && pxCenter < tile.x + TILE_WIDTH){
+                if(player.y + player.height >= BASE_HEIGHT - TILE_HEIGHT){
+                    player.y = BASE_HEIGHT - TILE_HEIGHT - player.height;
+                    player.vy = 0;
+                    onTile = true;
+                }
             }
         }
+        if(tile.platform){
+            const p = tile.platform;
+            if(player.x + player.width > p.x && player.x < p.x + p.width){
+                if(player.y + player.height >= p.y && player.y + player.height <= p.y + player.vy + 0.5){
+                    player.y = p.y - player.height;
+                    player.vy = 0;
+                    onTile = true;
+                }
+            }
+        }
+
+        // コイン回収
         tile.coins = tile.coins.filter(c=>{
-            const hit = player.x+player.width>c.x && player.x<c.x+c.width &&
-                        player.y+player.height>c.y && player.y<c.y+c.height;
-            if(hit) score+=10;
+            const hit = player.x + player.width > c.x && player.x < c.x + c.width &&
+                        player.y + player.height > c.y && player.y < c.y + c.height;
+            if(hit) score += 10;
             return !hit;
         });
     }
-    player.onGround=onTile;
+    player.onGround = onTile;
 
-    if(player.y>BASE_HEIGHT){ setTimeout(showGameOver, 50); return; }
+    if(player.y > BASE_HEIGHT){
+        setTimeout(showGameOver, 50);
+        return;
+    }
 
     ctx.fillStyle='red';
-    ctx.fillRect(player.x,player.y,player.width,player.height);
+    ctx.fillRect(player.x, player.y, player.width, player.height);
 
-    score+=0.1;
+    score += 0.1;
     ctx.fillStyle='black';
     ctx.font='16px sans-serif';
     ctx.fillText("Score: "+Math.floor(score),10,20);
